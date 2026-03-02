@@ -2,7 +2,7 @@
 
 This repository provides a **3D extension of the Masked Autoencoder (MAE) framework**, designed for self-supervised pretraining on **volumetric medical imaging data** (e.g., CT scans). Our method extends MAE to 3D by incorporating **custom volumetric patch embedding** and **Transformer-based feature learning**, enabling efficient representation learning for medical imaging applications.
 
-As part of this framework, we introduce **TANGERINE** (*Thoracic Autoencoder Network Generating Embeddings for Radiological Interpretation for Numerous End-tasks*), a **ViT-Large model pretrained on 98,000 chest CT volumes** for lung screening. TANGERINE demonstrates the effectiveness of this framework and is described in detail in our paper (citation below). We provide the **pretrained encoder and decoder weights**, which can be used to initialize fine-tuning for a variety of downstream tasks.
+As part of this framework, we introduce **TANGERINE** (*Thoracic Autoencoder Network Generating Embeddings for Radiological Interpretation for Numerous End-tasks*), a **ViT-Large model pretrained on 98,000 chest CT volumes** for lung screening. TANGERINE demonstrates the effectiveness of this framework and is described in detail in our paper (citation below). We provide the **pretrained encoder weights**, which can be used to initialize fine-tuning for a variety of downstream tasks.
 
 
 ## Key Features
@@ -17,7 +17,6 @@ As part of this framework, we introduce **TANGERINE** (*Thoracic Autoencoder Net
 
 - **Pretrained ViT Large Model**  
   - TANGERINE, our pretrained ViT-Large model, was trained on 98,000 chest CT volumes for thoracic screening, as detailed in our paper.  
-  - Pretrained TANGERINE **encoder and decoder weights** are available at: [Request Free access URL LINK coming soon](https://drive.google.com/drive/folders/1hESpODUMGY5572jDuZBB2QHiOf0ac5tO?usp=share_link)  
   - This pretrained model can be **readily finetuned** for a wide range of **downstream tasks**.
 
 - **Flexible Finetuning and Inference**  
@@ -145,9 +144,9 @@ Modify this function as needed to fit specific dataset characteristics.
 
 ## Pretrained Model Weights
 
-We provide **TANGERINE pretrained ViT-Large weights** for both the **encoder** and **decoder**, available at the following link:
+We provide **TANGERINE pretrained ViT-Large weights** for both the **encoder**, available at the following link:
 
-[Request Free access URL LINK coming soon](https://drive.google.com/drive/folders/1hESpODUMGY5572jDuZBB2QHiOf0ac5tO?usp=share_link)
+[Zenodo](https://zenodo.org/records/18835750)
 
 
 These weights can be directly used for **finetuning** across a wide range of downstream tasks, including **classification**, **segmentation**, and **detection**.
@@ -168,9 +167,7 @@ This project is licensed under the **CC-BY-NC 4.0** license.
 
 If you use this repository in academic work, please cite:
 
-```
-Pending
-```
+McConnell, N., Vasudev, P., Yamada, D. et al. A computationally frugal, open-source chest CT foundation model for thoracic disease detection in lung cancer screening programmes. *Commun Med* **6**, 83 (2026). https://doi.org/10.1038/s43856-025-01328-1
 
 ---
 
