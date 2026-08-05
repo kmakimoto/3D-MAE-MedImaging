@@ -17,7 +17,7 @@ so a rerun after a crash/interruption picks up where it left off.
 
 Usage:
     # Small test run first — ALWAYS do this before the full 10k run
-    python build_h5.py --limit 20
+    python build_h5.py --limit 10
 
     # Full run
     python build_h5.py
@@ -35,13 +35,17 @@ from tqdm import tqdm
 # ---- Config -------------------------------------------------------------
 RAW_ROOT = "/copd/Processed/COPDGene"          # source, local to master
 OUTPUT_H5 = "/home/km2347/ct_volumes.h5"       # local disk on master, NOT /copd or /home
-LABELS_CSV = "/home/km2347/copdgene_labels.csv"  # TODO: confirm actual path to your CSV
+LABELS_CSV = "/home/km2347/COPDGene_Data/COPDGene_P1P2P3_Flat_SM_NS_Sep24.txt" 
 
 TARGET_SIZE = (256, 256, 256)   # (D, H, W) — matches TANGERINE pretraining resolution
 HU_MIN, HU_MAX = -1200, 800
 N_WORKERS = 8                    # tune to master's available cores — check `nproc` first
 
 ID_COLUMN = "sid"                # confirmed column name from df.head()
+
+DEMO_COLUMNS = ["gender", "Age_P1", "race", "ATS_PackYears_P1", 
+                "smoking_status_P1", "finalGold_P1", 
+                "finalGold_P2"]  # for HDF5 attrs
 
 MISSING_LOG = "missing_or_ambiguous_sids.txt"
 
@@ -103,54 +107,74 @@ def main():
     parser.add_argument("--limit", type=int, default=None,
                          help="Process only the first N subjects — use for a test run before the full 10k job")
     args = parser.parse_args()
-
-    df = pd.read_csv(LABELS_CSV)
+ 
+    df = pd.read_csv(LABELS_CSV, sep="\t")
     assert ID_COLUMN in df.columns, f"CSV must have column {ID_COLUMN!r}, found {df.columns.tolist()}"
-    sids = df[ID_COLUMN].astype(str).tolist()
-
+    df[ID_COLUMN] = df[ID_COLUMN].astype(str)
+ 
+    missing_demo_cols = [c for c in DEMO_COLUMNS if c not in df.columns]
+    if missing_demo_cols:
+        raise ValueError(f"DEMO_COLUMNS not found in CSV: {missing_demo_cols}. "
+                          f"Available columns: {df.columns.tolist()}")
+ 
+    df_by_sid = df.set_index(ID_COLUMN)   # for fast per-sid attr lookup in the write loop
+    sids = df[ID_COLUMN].tolist()
+ 
     if args.limit:
         sids = sids[:args.limit]
         print(f"TEST RUN: limited to first {len(sids)} subjects")
-
+ 
     mode = "a" if os.path.exists(OUTPUT_H5) else "w"
     if mode == "a":
         print(f"{OUTPUT_H5} already exists — resuming, will skip already-written sids")
-
+ 
     written = []
     skipped = []
-
+ 
     os.makedirs(os.path.dirname(OUTPUT_H5), exist_ok=True)
-
+ 
     with h5py.File(OUTPUT_H5, mode) as h5f, \
          ProcessPoolExecutor(max_workers=N_WORKERS) as pool:
-
+ 
         already_done = set(h5f.keys())
         sids_to_process = [s for s in sids if s not in already_done]
         print(f"{len(already_done)} already in {OUTPUT_H5}, processing {len(sids_to_process)} remaining")
-
+ 
         futures = {pool.submit(process_one, sid): sid for sid in sids_to_process}
-
+ 
         for future in tqdm(as_completed(futures), total=len(futures)):
             sid, arr, cid, err = future.result()
             if arr is None:
                 skipped.append((sid, err))
                 continue
-
+ 
             dset = h5f.create_dataset(sid, data=arr, compression="gzip", compression_opts=1)
             dset.attrs["sid"] = sid
             dset.attrs["cid"] = cid
+ 
+            if sid in df_by_sid.index:
+                row = df_by_sid.loc[sid]
+                for col in DEMO_COLUMNS:
+                    val = row[col]
+                    if pd.isna(val):
+                        dset.attrs[col] = "NA"
+                    elif isinstance(val, (int, float, np.integer, np.floating)):
+                        dset.attrs[col] = float(val)
+                    else:
+                        dset.attrs[col] = str(val)
+ 
             written.append(sid)
-
+ 
     print(f"\nWrote {len(written)} volumes to {OUTPUT_H5}")
     print(f"Skipped {len(skipped)} subjects (missing or ambiguous matches)")
-
+ 
     if skipped:
         with open(MISSING_LOG, "w") as f:
             for sid, reason in skipped:
                 f.write(f"{sid}\t{reason}\n")
         print(f"Details written to {MISSING_LOG} — review before the full run" if args.limit
               else f"Details written to {MISSING_LOG}")
-
-
+ 
+ 
 if __name__ == "__main__":
     main()
