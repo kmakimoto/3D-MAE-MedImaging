@@ -3,14 +3,13 @@
 
 """
 build_h5.py — Convert COPDGene .nrrd CT volumes (Phase 1 / STD kernel / INSP)
-into a single HDF5 file of fixed-size, HU-clipped, int16 cubes.
+into a single HDF5 file of fixed-size (256, 256, 256), HU-clipped, int16 cubes,
+based on the TANGERINE paper. 
 
-Run directly on `master`, where /copd/Processed/COPDGene is mounted locally
-(via SMB) — no rsync/staging copy needed.
+Run directly on `master`.
 
 Resampling is parallelized across worker processes; all HDF5 writes happen
-in the main process only (HDF5 does not support concurrent multi-process
-writes to the same file).
+in the main process only.
 
 Resume-safe: if OUTPUT_H5 already exists, already-written sids are skipped,
 so a rerun after a crash/interruption picks up where it left off.
@@ -41,7 +40,7 @@ TARGET_SIZE = (256, 256, 256)   # (D, H, W) — matches TANGERINE pretraining re
 HU_MIN, HU_MAX = -1200, 800
 N_WORKERS = 8                    # tune to master's available cores — check `nproc` first
 
-ID_COLUMN = "sid"                # confirmed column name from df.head()
+ID_COLUMN = "sid"               
 
 DEMO_COLUMNS = ["gender", "Age_P1", "race", "ATS_PackYears_P1", 
                 "smoking_status_P1", "finalGold_P1", 
