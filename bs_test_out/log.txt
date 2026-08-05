@@ -1,0 +1,1 @@
+{"train_lr": 6.611570247933884e-06, "train_loss": 0.6936955018477007, "test_loss": 0.6937115669250489, "test_accuracy": 0.2, "test_f1": 0.0, "test_auc": 0.5, "epoch": 0, "n_parameters": 306511873}
