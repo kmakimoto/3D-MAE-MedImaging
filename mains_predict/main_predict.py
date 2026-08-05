@@ -18,7 +18,7 @@ import torch
 import torch.backends.cudnn as cudnn
 import util.misc as misc
 import models_vit
-from datasets_three_d_fine import Custom3DDataset
+from datasets_three_d_fine_h5 import Custom3DDataset
 
 
 def get_args_parser():
