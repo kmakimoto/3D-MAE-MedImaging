@@ -264,7 +264,7 @@ def main(args):
     ######## ######## ######## ######## ######## ######## ######## ######## ######## ######## ######## ########
 
     model = models_vit.__dict__[args.model](
-        img_size=args.img_size,
+        img_size=args.input_size,
         num_classes=args.nb_classes,
         drop_path_rate=args.drop_path,
         global_pool=args.global_pool,
@@ -272,7 +272,7 @@ def main(args):
 
     if args.finetune and not args.eval:
         checkpoint = torch.load(args.finetune, map_location='cpu')
-        print("Load pre-trained checkpoint from: %s" % weight_path)
+        print("Load pre-trained checkpoint from: %s" % args.finetune)
         checkpoint_model = checkpoint['model'] if "model" in checkpoint.keys() else checkpoint['model_state']
 
         if 'pos_embed' in checkpoint_model:
