@@ -200,8 +200,8 @@ def main(args):
 
 ######## ######## ######## ######## ######## ######## ######## ######## ######## ######## ######## ########
 
-    dataset_train = Custom3DDataset(csv_path=args.data_path_tr, h5_path=args.h5_path_tr, transform=transform_train)
-    dataset_val = Custom3DDataset(csv_path=args.data_path_val, h5_path=args.h5_path_val, transform=None)
+    dataset_train = Custom3DDataset(csv_path=args.data_path_tr, h5_path=args.h5_path, transform=transform_train)
+    dataset_val = Custom3DDataset(csv_path=args.data_path_val, h5_path=args.h5_path, transform=None)
 
 ######## ######## ######## ######## ######## ######## ######## ######## ######## ######## ######## ########
 
@@ -425,9 +425,5 @@ if __name__ == '__main__':
         Path(args.output_dir).mkdir(parents=True, exist_ok=True)
     main(args)
 
-
-
-
-
-
-
+# Example code to run in terminal (gpu4 in mae_env) 
+# PYTHONPATH=. python mains_fine/main_finetune_class_epoch_h5.py --data_path_tr train_smoke.csv --data_path_val val_smoke.csv --h5_path /home/km2347/ct_volumes.h5 --finetune /home/km2347/3D-MAE-MedImaging/checkpoints/tangerine-checkpoint.pth --input_size 256 --batch_size 1 --epochs 1 --nb_classes 1 --binary_class 1 --output_dir ./smoke_test_out --log_dir ./smoke_test_log --num_workers 2
