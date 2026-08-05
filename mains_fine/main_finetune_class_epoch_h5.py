@@ -99,6 +99,8 @@ def get_args_parser():
                         help='dataset path')
     parser.add_argument('--data_path_val', default='required', type=str,
                         help='dataset path')
+    parser.add_argument('--h5_path', default='', type=str,
+                     help='path to the shared HDF5 file containing CT volumes')
     parser.add_argument('--nb_classes', default=1, type=int,
                         help='number of the classification types')
 
@@ -198,8 +200,8 @@ def main(args):
 
 ######## ######## ######## ######## ######## ######## ######## ######## ######## ######## ######## ########
 
-    dataset_train = Custom3DDataset(csv_path=args.data_path_tr, transform=transform_train)
-    dataset_val = Custom3DDataset(csv_path=args.data_path_val, transform=None)
+    dataset_train = Custom3DDataset(csv_path=args.data_path_tr, h5_path=args.h5_path_tr, transform=transform_train)
+    dataset_val = Custom3DDataset(csv_path=args.data_path_val, h5_path=args.h5_path_val, transform=None)
 
 ######## ######## ######## ######## ######## ######## ######## ######## ######## ######## ######## ########
 
