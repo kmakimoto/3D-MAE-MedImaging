@@ -58,7 +58,8 @@ class Custom3DDataset(Dataset):
                 raise KeyError(f"'{sid}' not found in {self.h5_path}")
             volume = f[sid][:].astype(np.float32)
 
-        volume = (volume + abs(self.hu_min)) / (self.hu_max - self.hu_min)
+        # Min-max normalization to [0, 1]
+        volume = (volume + 1200) / (800 + 1200)
         volume_tensor = torch.tensor(volume, dtype=torch.float32).unsqueeze(0)  # [1, D, H, W]
 
         if self.transform:
