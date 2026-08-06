@@ -8,17 +8,14 @@ based on the TANGERINE paper.
 
 Run directly on `master`.
 
-Resampling is parallelized across worker processes; all HDF5 writes happen
-in the main process only.
-
 Resume-safe: if OUTPUT_H5 already exists, already-written sids are skipped,
 so a rerun after a crash/interruption picks up where it left off.
 
 Usage:
-    # Small test run first — ALWAYS do this before the full 10k run
+    # Small test run first 
     python build_h5.py --limit 10
 
-    # Full run
+    # Full run cohort
     python build_h5.py
 """
 import os
@@ -33,21 +30,19 @@ from tqdm import tqdm
 
 # ---- Config -------------------------------------------------------------
 RAW_ROOT = "/copd/Processed/COPDGene"          # source, local to master
-OUTPUT_H5 = "/home/km2347/ct_volumes.h5"       # local disk on master, NOT /copd or /home
+OUTPUT_H5 = "/home/km2347/ct_volumes.h5"       # local
 LABELS_CSV = "/home/km2347/COPDGene_Data/COPDGene_P1P2P3_Flat_SM_NS_Sep24.txt" 
 
 TARGET_SIZE = (256, 256, 256)   # (D, H, W) — matches TANGERINE pretraining resolution
 HU_MIN, HU_MAX = -1200, 800
-N_WORKERS = 8                    # tune to master's available cores — check `nproc` first
+N_WORKERS = 8                    
 
 ID_COLUMN = "sid"     
-
-# Create Binary FEV1_Decline Label using Change_P1_P2_FEV1_ml_yr
 
 DEMO_COLUMNS = ["gender", "Age_P1", "race", "ATS_PackYears_P1", 
                 "smoking_status_P1", "finalGold_P1", 
                 "finalGold_P2", "binary_FEV1_decline_60",
-                "multiclass_FEV1_decline"]  # for HDF5 attrs
+                "multiclass_FEV1_decline"] 
 
 MISSING_LOG = "missing_or_ambiguous_sids.txt"
 
@@ -55,8 +50,7 @@ MISSING_LOG = "missing_or_ambiguous_sids.txt"
 # ---- Path resolution: Phase 1 (COPD), STD kernel, INSP only ------------
 def sid_to_nrrd_path(sid):
     """
-    Naming convention confirmed: {sid}_INSP_STD_{site}_COPD/{sid}_INSP_STD_{site}_COPD.nrrd
-    Phase 1 only ('COPD', not 'COPD2').
+    Naming convention: {sid}_INSP_STD_{site}_COPD/{sid}_INSP_STD_{site}_COPD.nrrd
     """
     pattern = os.path.join(RAW_ROOT, sid, f"{sid}_INSP_STD_*_COPD", f"{sid}_INSP_STD_*_COPD.nrrd")
     matches = glob.glob(pattern)
