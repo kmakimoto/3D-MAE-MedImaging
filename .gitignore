@@ -1,1 +1,8 @@
 checkpoints/*.pth
+checkpoints/
+bs_test_out/
+smoke_test_out/
+smoke_test_log/
+mae_env/
+*.pth
+*.tfevents.*
