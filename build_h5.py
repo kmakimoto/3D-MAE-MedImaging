@@ -40,11 +40,14 @@ TARGET_SIZE = (256, 256, 256)   # (D, H, W) — matches TANGERINE pretraining re
 HU_MIN, HU_MAX = -1200, 800
 N_WORKERS = 8                    # tune to master's available cores — check `nproc` first
 
-ID_COLUMN = "sid"               
+ID_COLUMN = "sid"     
+
+# Create Binary FEV1_Decline Label using Change_P1_P2_FEV1_ml_yr
 
 DEMO_COLUMNS = ["gender", "Age_P1", "race", "ATS_PackYears_P1", 
                 "smoking_status_P1", "finalGold_P1", 
-                "finalGold_P2"]  # for HDF5 attrs
+                "finalGold_P2", "binary_FEV1_decline_60",
+                "multiclass_FEV1_decline"]  # for HDF5 attrs
 
 MISSING_LOG = "missing_or_ambiguous_sids.txt"
 
