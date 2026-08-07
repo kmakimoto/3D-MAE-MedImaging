@@ -35,7 +35,7 @@ LABELS_CSV = "/home/km2347/COPDGene_Data/COPDGene_P1P2P3_Flat_SM_NS_Sep24.txt"
 
 TARGET_SIZE = (256, 256, 256)   # (D, H, W) — matches TANGERINE pretraining resolution
 HU_MIN, HU_MAX = -1200, 800
-N_WORKERS = 8                    
+N_WORKERS = 4                    
 
 ID_COLUMN = "sid"     
 
