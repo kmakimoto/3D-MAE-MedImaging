@@ -6,8 +6,6 @@ build_h5.py — Convert COPDGene .nrrd CT volumes (Phase 1 / STD kernel / INSP)
 into a single HDF5 file of fixed-size (256, 256, 256), HU-clipped, int16 cubes,
 based on the TANGERINE paper. 
 
-Run directly on `master`.
-
 Resume-safe: if OUTPUT_H5 already exists, already-written sids are skipped,
 so a rerun after a crash/interruption picks up where it left off.
 
@@ -18,6 +16,7 @@ Usage:
     # Full run cohort
     python build_h5.py
 """
+
 import os
 import glob
 import argparse
@@ -29,7 +28,7 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from tqdm import tqdm
 
 # ---- Config -------------------------------------------------------------
-RAW_ROOT = "/copd/Processed/COPDGene"          # source, local to master
+RAW_ROOT = "/datagpu/datasets/km2347/COPDGene_master"        # mounted master to local
 OUTPUT_H5 = "/home/km2347/ct_volumes.h5"       # local
 LABELS_CSV = "/home/km2347/COPDGene_Data/COPDGene_P1P2P3_Flat_SM_NS_Sep24.txt" 
 
@@ -61,7 +60,7 @@ def sid_to_nrrd_path(sid):
     return matches[0], None
 
 
-# ---- Worker: resample only, no HDF5 access (runs in subprocess) --------
+# ---- Resample images --------
 def resample_to_fixed_size(sitk_image, target_size_dhw):
     original_size = sitk_image.GetSize()          # SimpleITK order: (W, H, D)
     original_spacing = sitk_image.GetSpacing()
@@ -81,7 +80,7 @@ def resample_to_fixed_size(sitk_image, target_size_dhw):
 
 
 def process_one(sid):
-    """Runs in a worker process. Returns (sid, array_or_None, cid_or_None, error_or_None)."""
+    """Returns (sid, array_or_None, cid_or_None, error_or_None)."""
     nrrd_path, path_err = sid_to_nrrd_path(sid)
     if nrrd_path is None:
         return sid, None, None, path_err
@@ -144,7 +143,7 @@ def main():
                 skipped.append((sid, err))
                 continue
  
-            dset = h5f.create_dataset(sid, data=arr, compression="gzip", compression_opts=1)
+            dset = h5f.create_dataset(sid, data=arr, compression="gzip", compression_opts=1)    # Compresses the images
             dset.attrs["sid"] = sid
             dset.attrs["cid"] = cid
  
