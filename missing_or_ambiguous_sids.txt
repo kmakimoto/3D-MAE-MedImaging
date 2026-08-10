@@ -1,0 +1,19 @@
+10008W	no_match
+10002K	Exception thrown in SimpleITK ImageFileReader_Execute: /tmp/SimpleITK-build/ITK-prefix/include/ITK-5.3/itkImportImageContainer.hxx:191:
+Failed to allocate memory for image.
+10004O	Exception thrown in SimpleITK ImageFileReader_Execute: /tmp/SimpleITK-build/ITK-prefix/include/ITK-5.3/itkImportImageContainer.hxx:191:
+Failed to allocate memory for image.
+10005Q	Exception thrown in SimpleITK ImageFileReader_Execute: /tmp/SimpleITK-build/ITK-prefix/include/ITK-5.3/itkImportImageContainer.hxx:191:
+Failed to allocate memory for image.
+10006S	Exception thrown in SimpleITK ImageFileReader_Execute: /tmp/SimpleITK-build/ITK-prefix/include/ITK-5.3/itkImportImageContainer.hxx:191:
+Failed to allocate memory for image.
+10009Y	Exception thrown in SimpleITK ImageFileReader_Execute: /tmp/SimpleITK-build/ITK-prefix/include/ITK-5.3/itkImportImageContainer.hxx:191:
+Failed to allocate memory for image.
+10010J	Exception thrown in SimpleITK ImageFileReader_Execute: /tmp/SimpleITK-build/ITK-prefix/include/ITK-5.3/itkImportImageContainer.hxx:191:
+Failed to allocate memory for image.
+10011L	Exception thrown in SimpleITK ImageFileReader_Execute: /tmp/SimpleITK-build/ITK-prefix/include/ITK-5.3/itkImportImageContainer.hxx:191:
+Failed to allocate memory for image.
+10012N	Exception thrown in SimpleITK ImageFileReader_Execute: /tmp/SimpleITK-build/ITK-prefix/include/ITK-5.3/itkImportImageContainer.hxx:191:
+Failed to allocate memory for image.
+10013P	Exception thrown in SimpleITK ImageFileReader_Execute: /tmp/SimpleITK-build/ITK-prefix/include/ITK-5.3/itkImportImageContainer.hxx:191:
+Failed to allocate memory for image.
