@@ -1,8 +1,0 @@
-10008W	no_match
-10034X	no_match
-10064G	no_match
-10093N	no_match
-10108A	no_match
-10109C	no_match
-10137H	no_match
-10139L	no_match

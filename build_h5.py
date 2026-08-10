@@ -9,8 +9,14 @@ based on the TANGERINE paper.
 Resume-safe: if OUTPUT_H5 already exists, already-written sids are skipped,
 so a rerun after a crash/interruption picks up where it left off.
 
+Memory-safety: each worker process has a hard memory cap (WORKER_MEMORY_LIMIT_GB)
+so an oversized/unexpected volume fails cleanly for that one subject instead of
+pushing the whole machine into swap. Workers are also recycled periodically
+(TASKS_PER_WORKER_RESTART) to bound memory creep from long-running SimpleITK
+processes across thousands of tasks.
+
 Usage:
-    # Small test run first 
+    # Small test run first
     python build_h5.py --limit 10
 
     # Full run cohort
@@ -20,6 +26,7 @@ Usage:
 import os
 import glob
 import argparse
+import resource
 import h5py
 import numpy as np
 import pandas as pd
@@ -34,7 +41,9 @@ LABELS_CSV = "/home/km2347/COPDGene_Data/COPDGene_P1P2P3_Flat_SM_NS_Sep24.txt"
 
 TARGET_SIZE = (256, 256, 256)   # (D, H, W) — matches TANGERINE pretraining resolution
 HU_MIN, HU_MAX = -1200, 800
-N_WORKERS = 4                    
+N_WORKERS = 8     
+WORKER_MEMORY_LIMIT_GB = 8          # hard cap per worker process
+TASKS_PER_WORKER_RESTART = 50       # recycle workers periodically to bound memory creep              
 
 ID_COLUMN = "sid"     
 
@@ -45,6 +54,12 @@ DEMO_COLUMNS = ["gender", "Age_P1", "race", "ATS_PackYears_P1",
 
 MISSING_LOG = "missing_or_ambiguous_sids.txt"
 
+def limit_worker_memory():
+    """Runs once per worker process at startup. Caps this process's address
+    space so a runaway/oversized volume fails cleanly (MemoryError, logged
+    per-subject) instead of silently pushing the whole machine into swap."""
+    max_bytes = WORKER_MEMORY_LIMIT_GB * 1024 ** 3
+    resource.setrlimit(resource.RLIMIT_AS, (max_bytes, max_bytes))
 
 # ---- Path: Phase 1 (COPD), STD kernel, INSP only --------------------
 def sid_to_nrrd_path(sid):
@@ -80,11 +95,11 @@ def resample_to_fixed_size(sitk_image, target_size_dhw):
 
 
 def process_one(sid):
-    """Returns (sid, array_or_None, cid_or_None, error_or_None)."""
+    """Runs in a worker process. Returns (sid, array_or_None, cid_or_None, error_or_None)."""
     nrrd_path, path_err = sid_to_nrrd_path(sid)
     if nrrd_path is None:
         return sid, None, None, path_err
-
+ 
     try:
         img = sitk.ReadImage(nrrd_path)
         img = resample_to_fixed_size(img, TARGET_SIZE)
@@ -92,6 +107,8 @@ def process_one(sid):
         arr = np.clip(arr, HU_MIN, HU_MAX).astype(np.int16)
         cid = os.path.basename(nrrd_path).replace(".nrrd", "")
         return sid, arr, cid, None
+    except MemoryError:
+        return sid, None, None, f"MemoryError (worker cap: {WORKER_MEMORY_LIMIT_GB}GB)"
     except Exception as e:
         return sid, None, None, str(e)
 
@@ -100,7 +117,7 @@ def process_one(sid):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--limit", type=int, default=None,
-                         help="Process only the first N subjects — use for a test run before the full 10k job")
+                         help="tests a subset of subjects")
     args = parser.parse_args()
  
     df = pd.read_csv(LABELS_CSV, sep="\t")
@@ -129,11 +146,17 @@ def main():
     os.makedirs(os.path.dirname(OUTPUT_H5), exist_ok=True)
  
     with h5py.File(OUTPUT_H5, mode) as h5f, \
-         ProcessPoolExecutor(max_workers=N_WORKERS) as pool:
+         ProcessPoolExecutor(
+             max_workers=N_WORKERS,
+             initializer=limit_worker_memory,
+             max_tasks_per_child=TASKS_PER_WORKER_RESTART,
+         ) as pool:
  
         already_done = set(h5f.keys())
         sids_to_process = [s for s in sids if s not in already_done]
         print(f"{len(already_done)} already in {OUTPUT_H5}, processing {len(sids_to_process)} remaining")
+        print(f"N_WORKERS={N_WORKERS}, per-worker memory cap={WORKER_MEMORY_LIMIT_GB}GB, "
+              f"worker recycled every {TASKS_PER_WORKER_RESTART} tasks")
  
         futures = {pool.submit(process_one, sid): sid for sid in sids_to_process}
  
@@ -143,7 +166,7 @@ def main():
                 skipped.append((sid, err))
                 continue
  
-            dset = h5f.create_dataset(sid, data=arr, compression="gzip", compression_opts=1)    # Compresses the images
+            dset = h5f.create_dataset(sid, data=arr, compression="gzip", compression_opts=1)
             dset.attrs["sid"] = sid
             dset.attrs["cid"] = cid
  
