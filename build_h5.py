@@ -46,7 +46,7 @@ DEMO_COLUMNS = ["gender", "Age_P1", "race", "ATS_PackYears_P1",
 MISSING_LOG = "missing_or_ambiguous_sids.txt"
 
 
-# ---- Path resolution: Phase 1 (COPD), STD kernel, INSP only ------------
+# ---- Path: Phase 1 (COPD), STD kernel, INSP only --------------------
 def sid_to_nrrd_path(sid):
     """
     Naming convention: {sid}_INSP_STD_{site}_COPD/{sid}_INSP_STD_{site}_COPD.nrrd
@@ -60,7 +60,7 @@ def sid_to_nrrd_path(sid):
     return matches[0], None
 
 
-# ---- Resample images --------
+# ---- Resample images ----------------------------------------------
 def resample_to_fixed_size(sitk_image, target_size_dhw):
     original_size = sitk_image.GetSize()          # SimpleITK order: (W, H, D)
     original_spacing = sitk_image.GetSpacing()
