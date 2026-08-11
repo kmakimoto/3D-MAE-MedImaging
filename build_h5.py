@@ -9,27 +9,22 @@ based on the TANGERINE paper.
 Resume-safe: if OUTPUT_H5 already exists, already-written sids are skipped,
 so a rerun after a crash/interruption picks up where it left off.
 
-REWRITE NOTE: this version replaces concurrent.futures.ProcessPoolExecutor
-with multiprocessing.Pool, processed in small chunks with a fresh pool per
-chunk. Rationale, from a real stuck-run investigation:
-  - ProcessPoolExecutor has no reliable way to force-kill a pool that has
-    stopped making progress (its shutdown() waits for workers to exit on
-    their own). multiprocessing.Pool.terminate() forcibly kills worker
-    processes regardless of their state.
-  - A single long-lived pool running for ~10 hours has more opportunity to
-    degrade silently. Recreating the pool every CHUNK_SIZE subjects bounds
-    the blast radius of any one pool going bad to a single chunk, and
-    naturally gives every worker a clean restart periodically.
-  - A heartbeat is logged every HEARTBEAT_SEC regardless of whether any
-    subject has completed, so the log file itself is trustworthy evidence
-    of whether the process is alive and progressing — no more ambiguity
-    between "the job is stuck" and "my terminal view stopped updating."
-  - Per-subject wall-clock timeout is enforced from the main process (via
-    polling AsyncResult.ready()), not via SIGALRM inside the worker — this
-    also works even if the underlying hang were ever a truly uninterruptible
-    (D-state) I/O wait, since it doesn't depend on the stuck worker
-    responding to anything; the chunk's pool is simply terminated and a
-    fresh one started for the next chunk.
+DESIGN NOTE: uses multiprocessing.Pool (not concurrent.futures.ProcessPoolExecutor)
+because Pool.terminate() can forcibly kill worker processes regardless of their
+state — ProcessPoolExecutor has no equivalent, which caused earlier stuck runs
+to hang indefinitely even on Ctrl+C.
+
+One continuous pool handles the whole batch (no fixed chunking) — the pool is
+only ever torn down and rebuilt reactively, when a real per-subject timeout is
+detected (our proxy for "the SSHFS mount likely died"), not on a fixed
+schedule. Subjects get MAX_RETRIES attempts across pool rebuilds before being
+permanently recorded as skipped, so a transient mount blip gets a second
+chance but a genuinely bad file doesn't retry forever.
+
+A heartbeat and a progress line on every completion are logged (flushed
+immediately) throughout, so `tail -f` on the log file is always a trustworthy,
+real-time view of what's happening — no live terminal session required to
+diagnose a stall.
 
 Usage:
     # Small test run first
@@ -60,10 +55,10 @@ TARGET_SIZE = (256, 256, 256)   # (D, H, W) — matches TANGERINE pretraining re
 HU_MIN, HU_MAX = -1200, 800
 
 N_WORKERS = 8
-CHUNK_SIZE = 200                    # fresh pool every this many subjects
+MAX_TASKS_PER_CHILD = 200           # per-worker recycling within the pool (memory-creep safety net)
 PER_SUBJECT_TIMEOUT_SEC = 240       # if a subject hasn't completed after this long, the
-                                     # whole chunk's pool is terminated and rebuilt
-HEARTBEAT_SEC = 30                  # log a liveness line at least this often, always
+                                     # whole pool is terminated and rebuilt for the remainder
+MAX_RETRIES = 2                     # attempts a timed-out subject gets before being permanently skipped
 FLUSH_EVERY_N = 20                  # periodic HDF5 flush so a crash loses at most this many writes
 
 ID_COLUMN = "sid"
@@ -149,18 +144,28 @@ def write_result(h5f, df_by_sid, sid, arr, cid, written):
     written.append(sid)
 
 
-def process_chunk(sids_chunk, h5f, df_by_sid, written, skipped):
-    """Runs one chunk against a fresh multiprocessing.Pool. If any subject
-    exceeds PER_SUBJECT_TIMEOUT_SEC without completing, the whole pool is
-    forcibly terminated (multiprocessing.Pool.terminate() kills workers
-    regardless of their state) and the still-pending subjects in this chunk
-    are recorded as timeouts, so the run can move on to the next chunk."""
-    pool = multiprocessing.Pool(processes=N_WORKERS)
-    start_times = {sid: time.time() for sid in sids_chunk}
-    async_results = {sid: pool.apply_async(process_one, (sid,)) for sid in sids_chunk}
+def run_pool_pass(sids_to_run, h5f, df_by_sid, written, skipped, total_to_process):
+    """Runs a single multiprocessing.Pool over all of sids_to_run. Returns a
+    list of sids that need to be retried (timed out but under MAX_RETRIES),
+    having already logged/recorded permanent skips for anything else.
+
+    The pool is only ever terminated reactively — when a subject exceeds
+    PER_SUBJECT_TIMEOUT_SEC — not on any fixed schedule. That timeout is
+    treated as evidence the SSHFS mount likely died broadly (observed
+    behavior: many subjects time out together, not one at a time), so the
+    whole pool is torn down and everything still pending is handed back to
+    the caller to retry against a fresh pool.
+    """
+    pool = multiprocessing.Pool(processes=N_WORKERS, maxtasksperchild=MAX_TASKS_PER_CHILD)
+    start_times = {sid: time.time() for sid in sids_to_run}
+    async_results = {sid: pool.apply_async(process_one, (sid,)) for sid in sids_to_run}
     pending = dict(async_results)
-    last_heartbeat = time.time()
-    last_progress = time.time()
+
+    def log_progress():
+        done = len(written) + len(skipped)
+        pct = 100 * done / total_to_process if total_to_process else 0
+        log(f"progress: {done}/{total_to_process} ({pct:.1f}%) — "
+            f"{len(written)} written, {len(skipped)} skipped")
 
     try:
         while pending:
@@ -180,30 +185,17 @@ def process_chunk(sids_chunk, h5f, df_by_sid, written, skipped):
                         if len(written) % FLUSH_EVERY_N == 0:
                             h5f.flush()
                     del pending[sid]
-                    last_progress = now
-
-            if now - last_heartbeat >= HEARTBEAT_SEC:
-                oldest_pending_age = max((now - start_times[s] for s in pending), default=0)
-                log(f"heartbeat: {len(written)} written, {len(skipped)} skipped, "
-                    f"{len(pending)} pending in this chunk, "
-                    f"oldest pending task age={oldest_pending_age:.0f}s, "
-                    f"idle since last completion={now - last_progress:.0f}s")
-                last_heartbeat = now
+                    log_progress()
 
             timed_out = [s for s in pending if now - start_times[s] > PER_SUBJECT_TIMEOUT_SEC]
             if timed_out:
-                log(f"TIMEOUT: {len(timed_out)} subject(s) exceeded {PER_SUBJECT_TIMEOUT_SEC}s: "
-                    f"{timed_out} — terminating this chunk's pool and moving on")
-                for sid in timed_out:
-                    skipped.append((sid, f"TIMEOUT after {PER_SUBJECT_TIMEOUT_SEC}s (pool terminated)"))
+                still_pending = list(pending.keys())
+                log(f"TIMEOUT: {len(timed_out)} subject(s) exceeded {PER_SUBJECT_TIMEOUT_SEC}s "
+                    f"(likely mount issue) — terminating pool. "
+                    f"{len(still_pending)} subjects total will be retried.")
                 pool.terminate()
                 pool.join()
-                # anything else still pending in this chunk (not itself timed out
-                # yet, but its worker just got killed) also can't complete now
-                for sid in pending:
-                    if sid not in timed_out:
-                        skipped.append((sid, "pool terminated due to a sibling subject's timeout"))
-                return  # abandon rest of this chunk, caller moves to the next one
+                return still_pending  # caller decides retry vs permanent skip
 
             time.sleep(1)
     finally:
@@ -212,6 +204,8 @@ def process_chunk(sids_chunk, h5f, df_by_sid, written, skipped):
             pool.join()
         except Exception:
             pass
+
+    return []  # everything in this pass completed normally
 
 
 # ---- Main -----------------------------------------------------------------
@@ -264,16 +258,32 @@ def main():
     already_done = set(h5f.keys())
     sids_to_process = [s for s in sids if s not in already_done]
     log(f"{len(already_done)} already in {OUTPUT_H5}, processing {len(sids_to_process)} remaining")
-    log(f"N_WORKERS={N_WORKERS}, CHUNK_SIZE={CHUNK_SIZE}, "
-        f"per-subject timeout={PER_SUBJECT_TIMEOUT_SEC}s, heartbeat every {HEARTBEAT_SEC}s")
+    log(f"N_WORKERS={N_WORKERS}, per-subject timeout={PER_SUBJECT_TIMEOUT_SEC}s, max retries={MAX_RETRIES}")
+
+    total_to_process = len(sids_to_process)
+    retry_counts = {}
 
     try:
-        chunks = [sids_to_process[i:i + CHUNK_SIZE] for i in range(0, len(sids_to_process), CHUNK_SIZE)]
-        for chunk_idx, chunk in enumerate(chunks):
-            log(f"--- chunk {chunk_idx + 1}/{len(chunks)} ({len(chunk)} subjects) ---")
-            process_chunk(chunk, h5f, df_by_sid, written, skipped)
-            log(f"chunk {chunk_idx + 1}/{len(chunks)} done. "
-                f"Running totals: {len(written)} written, {len(skipped)} skipped")
+        remaining = sids_to_process
+        while remaining:
+            still_pending = run_pool_pass(remaining, h5f, df_by_sid, written, skipped, total_to_process)
+
+            if not still_pending:
+                break  # pass completed normally, nothing left to retry
+
+            retry_batch = []
+            for sid in still_pending:
+                retry_counts[sid] = retry_counts.get(sid, 0) + 1
+                if retry_counts[sid] > MAX_RETRIES:
+                    skipped.append((sid, f"TIMEOUT after {MAX_RETRIES} retries — permanently skipped"))
+                    log(f"SKIP  {sid}: exceeded max retries ({MAX_RETRIES}), giving up on this subject")
+                else:
+                    retry_batch.append(sid)
+
+            if retry_batch:
+                log(f"Rebuilding pool and retrying {len(retry_batch)} subject(s) "
+                    f"(attempt {max(retry_counts[s] for s in retry_batch)}/{MAX_RETRIES})...")
+            remaining = retry_batch
     finally:
         h5f.flush()
         h5f.close()
