@@ -58,7 +58,7 @@ N_WORKERS = 8
 MAX_TASKS_PER_CHILD = 200           # per-worker recycling within the pool (memory-creep safety net)
 PER_SUBJECT_TIMEOUT_SEC = 240       # if a subject hasn't completed after this long, the
                                      # whole pool is terminated and rebuilt for the remainder
-MAX_RETRIES = 2                     # attempts a timed-out subject gets before being permanently skipped
+MAX_RETRIES = 100                   # attempts a timed-out subject gets before being permanently skipped
 FLUSH_EVERY_N = 20                  # periodic HDF5 flush so a crash loses at most this many writes
 
 ID_COLUMN = "sid"
