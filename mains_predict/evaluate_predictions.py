@@ -10,12 +10,15 @@ original script calls `.tolist()` on a per-sample tensor). This script:
   1. Loads that CSV (optionally joining with a separate CSV containing ground
      truth labels, on an ID column).
   2. Parses the stringified list in the predictions column back into floats.
-  3. Computes accuracy / F1 / AUC (classification) or MSE (regression), using
-     the same sklearn functions as `evaluate()` in engine_finetune.py.
+  3. Computes accuracy / F1 / AUC / PR-AUC / recall (sensitivity) /
+     specificity / Brier score (classification) or MSE (regression), using
+     the same sklearn functions as `evaluate()` in engine_finetune.py plus a
+     few additions.
   4. Computes 95% (configurable) percentile-bootstrap confidence intervals
      for every metric, using 1000 (configurable) resamples by default.
-  5. Saves a metrics JSON and (optionally) an ROC curve + confusion matrix
-     plot, since the original repo has no built-in visualization.
+  5. Saves the metrics as both metrics.json and metrics.csv, and
+     (optionally) an ROC curve + confusion matrix plot, since the original
+     repo has no built-in visualization.
 
 Usage examples
 ---------------
@@ -51,9 +54,12 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import (
     accuracy_score,
+    average_precision_score,
+    brier_score_loss,
     confusion_matrix,
     f1_score,
     mean_squared_error,
+    recall_score,
     roc_auc_score,
     roc_curve,
 )
@@ -142,7 +148,12 @@ def load_data(args):
                           f"Available columns: {list(df.columns)}")
 
     probs = parse_predictions(df[args.pred_col])
-    targets = df[args.label_col].to_numpy()
+    if args.task == 'multilabel':
+        # Multilabel targets are themselves list-valued (e.g. "[0, 1, 0]"),
+        # so they round-trip through CSV as strings just like predictions do.
+        targets = parse_predictions(df[args.label_col])
+    else:
+        targets = df[args.label_col].to_numpy()
     return probs, targets, df
 
 
@@ -150,7 +161,10 @@ def compute_point_metrics(probs, targets, task, threshold=0.5, positive_class_in
     """Computes metric values for one (probs, targets) pair. No printing, no
     randomness — used both for the headline numbers and inside each bootstrap
     resample. Raises on degenerate resamples (e.g. a single class present),
-    which the bootstrap loop catches and skips."""
+    which the bootstrap loop catches and skips.
+
+    Sensitivity and recall are numerically identical (both = TP / (TP + FN));
+    both are reported since clinical/ML audiences use different names for it."""
     metrics = {}
 
     if task == 'regression':
@@ -164,13 +178,32 @@ def compute_point_metrics(probs, targets, task, threshold=0.5, positive_class_in
         metrics['accuracy'] = float(accuracy_score(targets, preds))
         metrics['f1'] = float(f1_score(targets, preds, average='binary'))
         metrics['auc'] = float(roc_auc_score(targets, p))
+        metrics['pr_auc'] = float(average_precision_score(targets, p))
+        recall = float(recall_score(targets, preds, average='binary'))
+        metrics['recall'] = recall
+        metrics['sensitivity'] = recall
+        tn, fp, fn, tp = confusion_matrix(targets, preds, labels=[0, 1]).ravel()
+        metrics['specificity'] = float(tn / (tn + fp)) if (tn + fp) > 0 else float('nan')
+        metrics['brier'] = float(brier_score_loss(targets, p))
         return metrics, preds, p
 
     if task == 'multiclass':
         preds = np.argmax(probs, axis=1)
+        n_classes = probs.shape[1]
         metrics['accuracy'] = float(accuracy_score(targets, preds))
         metrics['f1'] = float(f1_score(targets, preds, average='weighted'))
         metrics['auc'] = float(roc_auc_score(targets, probs, multi_class='ovr'))
+        # One-hot targets are reused for both PR-AUC and the Brier score below.
+        one_hot = np.zeros_like(probs)
+        one_hot[np.arange(len(targets)), targets.astype(int)] = 1.0
+        metrics['pr_auc'] = float(average_precision_score(one_hot, probs, average='macro'))
+        recall = float(recall_score(targets, preds, average='macro'))
+        metrics['recall'] = recall
+        metrics['sensitivity'] = recall
+        metrics['specificity'] = _macro_specificity_multiclass(targets, preds, n_classes)
+        # Multi-class Brier score: mean over samples of sum over classes of
+        # (predicted prob - one-hot indicator)^2.
+        metrics['brier'] = float(np.mean(np.sum((probs - one_hot) ** 2, axis=1)))
         return metrics, preds, probs
 
     if task == 'multilabel':
@@ -178,9 +211,53 @@ def compute_point_metrics(probs, targets, task, threshold=0.5, positive_class_in
         metrics['accuracy'] = float((preds == targets).mean())
         metrics['f1'] = float(f1_score(targets, preds, average='samples'))
         metrics['auc'] = float(roc_auc_score(targets, probs, average='macro'))
+        metrics['pr_auc'] = float(average_precision_score(targets, probs, average='macro'))
+        recall = float(recall_score(targets, preds, average='macro'))
+        metrics['recall'] = recall
+        metrics['sensitivity'] = recall
+        metrics['specificity'] = _macro_specificity_multilabel(targets, preds)
+        # Per-label Brier score, macro-averaged across labels.
+        n_labels = targets.shape[1]
+        brier_per_label = [
+            brier_score_loss(targets[:, j], probs[:, j]) for j in range(n_labels)
+        ]
+        metrics['brier'] = float(np.mean(brier_per_label))
         return metrics, preds, probs
 
     raise ValueError(f'Unsupported task: {task}')
+
+
+def _macro_specificity_multiclass(targets, preds, n_classes):
+    """Specificity (TN / (TN + FP)) computed one-vs-rest per class, then
+    macro-averaged. Undefined (nan) if a class has no true negatives to speak
+    of, which is excluded from the average like sklearn does for recall/F1."""
+    cm = confusion_matrix(targets, preds, labels=np.arange(n_classes))
+    specificities = []
+    for i in range(n_classes):
+        tp = cm[i, i]
+        fn = cm[i, :].sum() - tp
+        fp = cm[:, i].sum() - tp
+        tn = cm.sum() - tp - fn - fp
+        if (tn + fp) > 0:
+            specificities.append(tn / (tn + fp))
+    if not specificities:
+        return float('nan')
+    return float(np.mean(specificities))
+
+
+def _macro_specificity_multilabel(targets, preds):
+    """Specificity per label (TN / (TN + FP)), macro-averaged across labels."""
+    n_labels = targets.shape[1]
+    specificities = []
+    for j in range(n_labels):
+        t, p = targets[:, j], preds[:, j]
+        tn = np.sum((t == 0) & (p == 0))
+        fp = np.sum((t == 0) & (p == 1))
+        if (tn + fp) > 0:
+            specificities.append(tn / (tn + fp))
+    if not specificities:
+        return float('nan')
+    return float(np.mean(specificities))
 
 
 def bootstrap_confidence_intervals(probs, targets, task, threshold, positive_class_index,
@@ -325,6 +402,20 @@ def main(args):
     with open(metrics_path, 'w') as f:
         json.dump(metrics, f, indent=2)
     print(f"Saved metrics to {metrics_path}")
+
+    metrics_csv_path = os.path.join(args.output_dir, 'metrics.csv')
+    metrics_rows = []
+    for name, entry in metrics.items():
+        metrics_rows.append({
+            'metric': name,
+            'value': entry.get('value'),
+            'ci_lower': entry.get('lower'),
+            'ci_upper': entry.get('upper'),
+            'n_valid_resamples': entry.get('n_valid_resamples'),
+            'n_undefined_resamples': entry.get('n_undefined_resamples'),
+        })
+    pd.DataFrame(metrics_rows).to_csv(metrics_csv_path, index=False)
+    print(f"Saved metrics to {metrics_csv_path}")
 
     if not args.no_plots and args.task != 'regression':
         make_plots(args.task, targets, preds, probs_for_plot, args.output_dir)
