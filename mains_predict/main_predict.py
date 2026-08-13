@@ -177,4 +177,5 @@ if __name__ == '__main__':
     args = get_args_parser().parse_args()
     main(args)
 
-
+# Example code to run in terminal (gpu4 in mae_env) 
+# PYTHONPATH=. python mains_predict/main_predict.py --input_csv test.csv --finetune ./bs_test_out/final_model.pth --h5_path /home/km2347/ct_volumes_test.h5 --output_csv /home/km2347/3D-MAE-MedImaging/results/output_predictions.csv

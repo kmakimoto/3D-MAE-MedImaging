@@ -25,7 +25,7 @@ Usage examples
 Binary classification, single CSV with both predictions and true labels:
     python3 evaluate_predictions.py \
         --pred_csv /results/example_data_out.csv \
-        --label_col label \
+        --label_col Label \
         --task binary
 
 Multiclass, labels in a separate CSV joined on 'patient_id':

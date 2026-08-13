@@ -426,4 +426,4 @@ if __name__ == '__main__':
     main(args)
 
 # Example code to run in terminal (gpu4 in mae_env) 
-# PYTHONPATH=. python mains_fine/main_finetune_class_epoch_h5.py --data_path_tr train_smoke.csv --data_path_val val_smoke.csv --h5_path /home/km2347/ct_volumes.h5 --finetune /home/km2347/3D-MAE-MedImaging/checkpoints/tangerine-checkpoint.pth --input_size 256 --batch_size 4 --epochs 1 --nb_classes 1 --binary_class 1 --output_dir ./bs_test_out --log_dir ./bs_test_log --num_workers 2
+# PYTHONPATH=. python mains_fine/main_finetune_class_epoch_h5.py --data_path_tr train.csv --data_path_val val.csv --h5_path /home/km2347/ct_volumes_test.h5 --finetune /home/km2347/3D-MAE-MedImaging/checkpoints/tangerine-checkpoint.pth --input_size 256 --batch_size 4 --epochs 1 --nb_classes 1 --binary_class 1 --output_dir ./bs_test_out --log_dir ./bs_test_log --num_workers 2
