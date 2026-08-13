@@ -9,22 +9,31 @@ based on the TANGERINE paper.
 Resume-safe: if OUTPUT_H5 already exists, already-written sids are skipped,
 so a rerun after a crash/interruption picks up where it left off.
 
-DESIGN NOTE: uses multiprocessing.Pool (not concurrent.futures.ProcessPoolExecutor)
-because Pool.terminate() can forcibly kill worker processes regardless of their
-state — ProcessPoolExecutor has no equivalent, which caused earlier stuck runs
-to hang indefinitely even on Ctrl+C.
-
-One continuous pool handles the whole batch (no fixed chunking) — the pool is
-only ever torn down and rebuilt reactively, when a real per-subject timeout is
-detected (our proxy for "the SSHFS mount likely died"), not on a fixed
-schedule. Subjects get MAX_RETRIES attempts across pool rebuilds before being
-permanently recorded as skipped, so a transient mount blip gets a second
-chance but a genuinely bad file doesn't retry forever.
-
-A heartbeat and a progress line on every completion are logged (flushed
-immediately) throughout, so `tail -f` on the log file is always a trustworthy,
-real-time view of what's happening — no live terminal session required to
-diagnose a stall.
+DESIGN NOTES (accumulated from real debugging over this project):
+  - Uses multiprocessing.Pool (not concurrent.futures.ProcessPoolExecutor)
+    because Pool.terminate() can forcibly kill worker processes regardless
+    of their state — ProcessPoolExecutor has no equivalent, which caused
+    earlier stuck runs to hang indefinitely even on Ctrl+C.
+  - One continuous pool handles the whole batch (no fixed chunking) — the
+    pool is only ever torn down and rebuilt reactively, when a real
+    per-subject timeout is detected (our proxy for "the SSHFS mount likely
+    died"), not on a fixed schedule. Subjects get MAX_RETRIES attempts
+    across pool rebuilds before being permanently recorded as skipped.
+  - Worker processes reset their signal handlers to OS default on startup
+    (worker_init). Without this, forked workers inherit the main process's
+    SIGTERM handler, so pool.terminate() causes every worker to try to run
+    handle_shutdown() (touching the same forked HDF5 file object
+    concurrently from multiple processes) instead of just dying cleanly.
+  - The main process's shutdown handler is guarded against re-entrancy: a
+    second SIGINT/SIGTERM arriving while a flush/close is already in
+    progress is ignored, rather than being allowed to interrupt
+    h5f.flush()/h5f.close() mid-operation — an interrupted flush/close is
+    exactly what corrupted the HDF5 file's internal index once already
+    (a double Ctrl-C is an easy, realistic way to trigger this).
+  - A progress line is logged (flushed immediately) on every single
+    subject's completion, so `tail -f` on the log file is always a
+    trustworthy, real-time view of what's happening — no live terminal
+    session required to check on a long run.
 
 Usage:
     # Small test run first
@@ -58,7 +67,7 @@ N_WORKERS = 8
 MAX_TASKS_PER_CHILD = 200           # per-worker recycling within the pool (memory-creep safety net)
 PER_SUBJECT_TIMEOUT_SEC = 240       # if a subject hasn't completed after this long, the
                                      # whole pool is terminated and rebuilt for the remainder
-MAX_RETRIES = 500                   # attempts a timed-out subject gets before being permanently skipped
+MAX_RETRIES = 500                     # attempts a timed-out subject gets before being permanently skipped
 FLUSH_EVERY_N = 20                  # periodic HDF5 flush so a crash loses at most this many writes
 
 ID_COLUMN = "sid"
@@ -75,6 +84,17 @@ def log(msg):
     """Timestamped, immediately-flushed print — so `tail -f` and the log file
     itself are always trustworthy about what's actually happening and when."""
     print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {msg}", flush=True)
+
+
+def worker_init():
+    """Runs once when each worker process starts. Resets signal handlers to
+    OS default — without this, forked workers inherit the main process's
+    SIGTERM handler, so pool.terminate() causes every worker to run
+    handle_shutdown() (touching the same forked HDF5 file object
+    concurrently from multiple processes) instead of just dying cleanly."""
+    signal.signal(signal.SIGTERM, signal.SIG_DFL)
+    signal.signal(signal.SIGINT, signal.SIG_DFL)
+    signal.signal(signal.SIGHUP, signal.SIG_DFL)
 
 
 # ---- Path: Phase 1 (COPD), STD kernel, INSP only --------------------
@@ -156,7 +176,8 @@ def run_pool_pass(sids_to_run, h5f, df_by_sid, written, skipped, total_to_proces
     whole pool is torn down and everything still pending is handed back to
     the caller to retry against a fresh pool.
     """
-    pool = multiprocessing.Pool(processes=N_WORKERS, maxtasksperchild=MAX_TASKS_PER_CHILD)
+    pool = multiprocessing.Pool(processes=N_WORKERS, maxtasksperchild=MAX_TASKS_PER_CHILD,
+                                 initializer=worker_init)
     start_times = {sid: time.time() for sid in sids_to_run}
     async_results = {sid: pool.apply_async(process_one, (sid,)) for sid in sids_to_run}
     pending = dict(async_results)
@@ -241,7 +262,18 @@ def main():
     os.makedirs(os.path.dirname(OUTPUT_H5), exist_ok=True)
     h5f = h5py.File(OUTPUT_H5, mode)
 
+    shutting_down = {"in_progress": False}
+
     def handle_shutdown(signum, frame):
+        if shutting_down["in_progress"]:
+            # A second signal arrived while we were already flushing/closing —
+            # ignore it rather than let it interrupt h5f.flush()/h5f.close()
+            # mid-operation, which can corrupt the file's internal index
+            # (this is what caused an earlier corruption incident, likely
+            # from a rapid double Ctrl-C).
+            log(f"Signal {signum} received again during shutdown — already closing, ignoring.")
+            return
+        shutting_down["in_progress"] = True
         log(f"Received signal {signum} — flushing and closing {OUTPUT_H5} cleanly before exit...")
         try:
             h5f.flush()
@@ -300,4 +332,15 @@ def main():
 
 
 if __name__ == "__main__":
+    # Use 'spawn' instead of the Linux default 'fork'. fork() duplicates the
+    # entire parent process, including its open file descriptor table, at
+    # the OS level — regardless of whether worker code ever references the
+    # corresponding Python object. Every worker was silently inheriting a
+    # duplicate open handle to ct_volumes.h5 purely as a fork side effect,
+    # even though process_one() never touches h5f. Across dozens of pool
+    # rebuild cycles in a long run, this is a plausible cause of the HDF5
+    # index corruption seen even on a clean, uninterrupted completion.
+    # spawn starts each worker as a genuinely fresh process with no
+    # inherited file descriptors, eliminating this risk at the root.
+    multiprocessing.set_start_method("spawn", force=True)
     main()
