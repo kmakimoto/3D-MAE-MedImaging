@@ -57,7 +57,7 @@ import SimpleITK as sitk
 
 # ---- Config -------------------------------------------------------------
 RAW_ROOT = "/datagpu/datasets/km2347/COPDGene_master"        # mounted master to local
-OUTPUT_H5 = "/home/km2347/ct_volumes.h5"       # local
+OUTPUT_H5 = "/home/km2347/ct_volumes_test.h5"       # local
 LABELS_CSV = "/home/km2347/COPDGene_Data/COPDGene_P1P2P3_Flat_SM_NS_Sep24.txt"
 
 TARGET_SIZE = (256, 256, 256)   # (D, H, W) — matches TANGERINE pretraining resolution
