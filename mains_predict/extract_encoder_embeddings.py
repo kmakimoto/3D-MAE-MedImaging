@@ -458,9 +458,8 @@ if __name__ == "__main__":
 
 # Example usage: 
 #python3 mains_predict/extract_encoder_embeddings.py \
-#  --input_csv /path/to/your_174_subjects.csv \
-#  --output_csv /path/to/output_embeddings.csv \
-#  --finetune /path/to/tangerine_checkpoint.pth \
+#  --input_csv example_inputs/input.csv \
+#  --output_csv example_inputs/output_embeddings.csv \
+#  --finetune checkpoints/tangerine_checkpoint.pth \
 #  --resample \
-#  --target_size 256 256 256 \
-#  --embedding_type pre_logits
+#  --target_size 256 256 256

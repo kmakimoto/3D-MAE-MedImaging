@@ -32,12 +32,12 @@ def get_args_parser() -> argparse.ArgumentParser:
         help="Root directory containing per-subject folders (RAW_ROOT).",
     )
     parser.add_argument(
-        "--output_csv", default='/home/km2347/3D-MAE-MedImaging/example_inputs/',  type=str,
+        "--output_csv", default='/home/km2347/3D-MAE-MedImaging/example_inputs/input.csv',  type=str,
         help="Where to write the resolved Path/SID CSV. This is what you pass as "
              "--input_csv to extract_encoder_embeddings.py.",
     )
     parser.add_argument(
-        "--failures_csv", default='/home/km2347/3D-MAE-MedImaging/example_inputs/', type=str,
+        "--failures_csv", default='/home/km2347/3D-MAE-MedImaging/example_inputs/failures.csv', type=str,
         help="Optional path to also write a CSV of SIDs that failed to resolve, with a reason.",
     )
     parser.add_argument(
