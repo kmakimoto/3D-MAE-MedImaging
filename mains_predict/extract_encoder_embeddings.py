@@ -187,9 +187,11 @@ class VolumePathDataset(Dataset):
         if volume.ndim != 3:
             raise ValueError(f"Expected a 3D volume at {file_path}, got shape {volume.shape}")
         return volume
-
-def _resample_sitk_image(sitk_image: "sitk.Image", target_size_dhw: Tuple[int, int, int]) -> "sitk.Image":
-
+    
+    @staticmethod
+    def _resample_sitk_image(sitk_image: "sitk.Image", target_size_dhw: Tuple[int, int, int]) -> "sitk.Image":
+        import SimpleITK as sitk
+ 
         # SimpleITK's GetSize()/SetSize() use (Width, Height, Depth) axis order (x, y, z),
         # the reverse of the (Depth, Height, Width) numpy convention used elsewhere in this
         # file. Flip here so callers can keep thinking in (D, H, W) consistently.
@@ -211,7 +213,6 @@ def _resample_sitk_image(sitk_image: "sitk.Image", target_size_dhw: Tuple[int, i
         resample.SetInterpolator(sitk.sitkBSpline)
  
         return resample.Execute(sitk_image)
-
 
 def clean_state_dict_keys(state_dict: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
     cleaned = {}
