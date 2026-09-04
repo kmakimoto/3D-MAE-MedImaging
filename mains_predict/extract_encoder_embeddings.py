@@ -11,7 +11,7 @@ import os
 import sys
 from contextlib import nullcontext
 from pathlib import Path
-from typing import Dict, Iterable, List, Tuple
+from typing import Dict, Iterable, List, Tuple, Optional
 
 import numpy as np
 import pandas as pd
@@ -97,6 +97,10 @@ def get_args_parser() -> argparse.ArgumentParser:
         help="After adding the channel dimension, permute volume as (C, W, H, D). Matches old ILA datasets.",
     )
 
+    parser.add_argument("--resample", action="store_true", help=...)
+    parser.set_defaults(resample=False)
+    parser.add_argument("--target_size", default=None, type=int, nargs=3, metavar=("D", "H", "W"), help=...)
+
     parser.add_argument("--device", default="cuda", type=str)
     parser.add_argument("--seed", default=0, type=int)
     parser.add_argument("--batch_size", default=1, type=int)
@@ -117,6 +121,8 @@ class VolumePathDataset(Dataset):
         volume_key: str = "volume",
         hu_normalize: bool = True,
         orientation_mod: bool = False,
+        resample: bool = False,
+        target_size: Optional[Tuple[int, int, int]] = None,
     ) -> None:
         self.csv_path = csv_path
         self.path_col = path_col
@@ -124,6 +130,8 @@ class VolumePathDataset(Dataset):
         self.hu_normalize = hu_normalize
         self.orientation_mod = orientation_mod
         self.samples = pd.read_csv(csv_path)
+        self.resample = resample
+        self.target_size = target_size
 
         if path_col not in self.samples.columns:
             raise ValueError(
@@ -166,7 +174,12 @@ class VolumePathDataset(Dataset):
                 raise ImportError("SimpleITK is required for NIfTI/DICOM-style inputs") from exc
 
             sitk_image = sitk.ReadImage(file_path)
+
+            if self.resample:
+                sitk_image = self._resample_sitk_image(sitk_image, self.target_size or (256, 256, 256))
+
             volume = sitk.GetArrayFromImage(sitk_image).astype(np.float32)
+
             if self.hu_normalize:
                 volume = np.clip(volume, -1200, 800)
                 volume = (volume + 1200) / 2000
@@ -174,6 +187,30 @@ class VolumePathDataset(Dataset):
         if volume.ndim != 3:
             raise ValueError(f"Expected a 3D volume at {file_path}, got shape {volume.shape}")
         return volume
+
+def _resample_sitk_image(sitk_image: "sitk.Image", target_size_dhw: Tuple[int, int, int]) -> "sitk.Image":
+
+        # SimpleITK's GetSize()/SetSize() use (Width, Height, Depth) axis order (x, y, z),
+        # the reverse of the (Depth, Height, Width) numpy convention used elsewhere in this
+        # file. Flip here so callers can keep thinking in (D, H, W) consistently.
+        target_size_whd = tuple(reversed(target_size_dhw))
+ 
+        original_size = sitk_image.GetSize()
+        original_spacing = sitk_image.GetSpacing()
+        new_spacing = [
+            osz * osp / nsz
+            for osz, osp, nsz in zip(original_size, original_spacing, target_size_whd)
+        ]
+ 
+        resample = sitk.ResampleImageFilter()
+        resample.SetOutputSpacing(new_spacing)
+        resample.SetSize(target_size_whd)
+        resample.SetOutputDirection(sitk_image.GetDirection())
+        resample.SetOutputOrigin(sitk_image.GetOrigin())
+        resample.SetTransform(sitk.Transform())
+        resample.SetInterpolator(sitk.sitkBSpline)
+ 
+        return resample.Execute(sitk_image)
 
 
 def clean_state_dict_keys(state_dict: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
@@ -365,12 +402,16 @@ def main(args: argparse.Namespace) -> None:
 
     model = load_model(args, device)
 
+    target_size = tuple(args.target_size) if args.target_size else (args.input_size,) * 3
+
     dataset = VolumePathDataset(
         csv_path=args.input_csv,
         path_col=args.path_col,
         volume_key=args.volume_key,
         hu_normalize=not args.no_hu_normalize,
         orientation_mod=args.orientation_mod,
+        resample=args.resample,
+        target_size=target_size,
     )
     data_loader = DataLoader(
         dataset,
