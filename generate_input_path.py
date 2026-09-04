@@ -28,16 +28,16 @@ def get_args_parser() -> argparse.ArgumentParser:
         help="Column name in --sid_csv holding subject IDs (default: sid).",
     )
     parser.add_argument(
-        "--raw_root", default="/home/km2347/ct_volumes_test.h5", required=True, type=str,
+        "--raw_root", default="/datagpu/datasets/km2347/COPDGene_master", type=str,
         help="Root directory containing per-subject folders (RAW_ROOT).",
     )
     parser.add_argument(
-        "--output_csv", required=True, type=str,
+        "--output_csv", default='/home/km2347/3D-MAE-MedImaging/example_inputs/',  type=str,
         help="Where to write the resolved Path/SID CSV. This is what you pass as "
              "--input_csv to extract_encoder_embeddings.py.",
     )
     parser.add_argument(
-        "--failures_csv", default=None, type=str,
+        "--failures_csv", default='/home/km2347/3D-MAE-MedImaging/example_inputs/', type=str,
         help="Optional path to also write a CSV of SIDs that failed to resolve, with a reason.",
     )
     parser.add_argument(
