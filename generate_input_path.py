@@ -28,7 +28,7 @@ def get_args_parser() -> argparse.ArgumentParser:
         help="Column name in --sid_csv holding subject IDs (default: sid).",
     )
     parser.add_argument(
-        "--raw_root", required=True, type=str,
+        "--raw_root", default="/home/km2347/ct_volumes_test.h5", required=True, type=str,
         help="Root directory containing per-subject folders (RAW_ROOT).",
     )
     parser.add_argument(
