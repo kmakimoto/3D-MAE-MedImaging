@@ -1,2 +1,0 @@
-{"train_lr": 6.611570247933884e-06, "train_loss": 0.6936955018477007, "test_loss": 0.6937115669250489, "test_accuracy": 0.2, "test_f1": 0.0, "test_auc": 0.5, "epoch": 0, "n_parameters": 306511873}
-{"train_lr": 9.411764705882357e-06, "train_loss": 0.6809494775884292, "test_loss": 0.6549224172319684, "test_accuracy": 0.7142857142857143, "test_f1": 0.0, "test_auc": 0.56328125, "epoch": 0, "n_parameters": 306511873}
