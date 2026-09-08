@@ -18,7 +18,7 @@ import torch
 import torch.backends.cudnn as cudnn
 import util.misc as misc
 import models_vit
-from datasets_three_d_fine import Custom3DDataset
+from datasets_three_d_fine_h5 import Custom3DDataset
 
 
 def get_args_parser():
@@ -46,6 +46,8 @@ def get_args_parser():
                         help='Path to input CSV with dataset information')
     parser.add_argument('--output_csv', default='/results/example_data_out.csv', type=str,
                         help='Path to output CSV for predictions')
+    parser.add_argument('--h5_path', default='', type=str,
+                        help='path to the shared HDF5 file containing CT volumes')
     parser.add_argument('--nb_classes', default=1, type=int,
                         help='Number of classes')
     parser.add_argument('--regression', default=False, type=int,
@@ -156,7 +158,7 @@ def main(args):
         return predictions, file_paths
 
     # Load the dataset for prediction
-    dataset = Custom3DDataset(args.input_csv)
+    dataset = Custom3DDataset(args.input_csv, h5_path=args.h5_path)
     data_loader = torch.utils.data.DataLoader(
         dataset, batch_size=args.batch_size, shuffle=False,
         num_workers=args.num_workers, pin_memory=args.pin_mem)
@@ -174,3 +176,6 @@ def main(args):
 if __name__ == '__main__':
     args = get_args_parser().parse_args()
     main(args)
+
+# Example code to run in terminal (gpu4 in mae_env) 
+# PYTHONPATH=. python mains_predict/main_predict.py --input_csv test.csv --finetune ./bs_test_out/final_model.pth --h5_path /home/km2347/ct_volumes_test.h5 --output_csv /home/km2347/3D-MAE-MedImaging/results/output_predictions.csv
