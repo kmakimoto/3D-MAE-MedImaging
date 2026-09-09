@@ -399,7 +399,7 @@ def main(args: argparse.Namespace) -> None:
 
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
-    cudnn.benchmark = True
+    cudnn.benchmark = False #originall set to True, but is not set in the models_vit.py for forward_features()
 
     model = load_model(args, device)
 
@@ -463,3 +463,5 @@ if __name__ == "__main__":
 #  --finetune checkpoints/tangerine_checkpoint.pth \
 #  --resample \
 #  --target_size 256 256 256
+#  --global_pool \
+#  --device cuda:1
