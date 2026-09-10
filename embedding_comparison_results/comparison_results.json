@@ -1,0 +1,136 @@
+{
+  "n_subjects_matched": 168,
+  "embedding_dim": 2048,
+  "classification": {
+    "label_col": "COPD_P1",
+    "n_subjects": 168,
+    "embedding_a": {
+      "auc": {
+        "point_estimate": 0.832236842105263,
+        "ci_lower": 0.770440282589291,
+        "ci_upper": 0.8887779473917713,
+        "n_boot": 1000,
+        "n_boot_skipped": 0
+      },
+      "accuracy": {
+        "point_estimate": 0.7440476190476191,
+        "ci_lower": 0.6785714285714286,
+        "ci_upper": 0.8035714285714286,
+        "n_boot": 1000,
+        "n_boot_skipped": 0
+      }
+    },
+    "embedding_b": {
+      "auc": {
+        "point_estimate": 0.801487414187643,
+        "ci_lower": 0.7341159111605948,
+        "ci_upper": 0.8625748650789702,
+        "n_boot": 1000,
+        "n_boot_skipped": 0
+      },
+      "accuracy": {
+        "point_estimate": 0.7440476190476191,
+        "ci_lower": 0.6785714285714286,
+        "ci_upper": 0.8035714285714286,
+        "n_boot": 1000,
+        "n_boot_skipped": 0
+      }
+    }
+  },
+  "regression": {
+    "label_col": "pctEmph_Thirona_P1",
+    "n_subjects": 159,
+    "embedding_a": {
+      "r2": {
+        "point_estimate": 0.7662494056638279,
+        "ci_lower": 0.6795399398463513,
+        "ci_upper": 0.8198029857659,
+        "n_boot": 1000,
+        "n_boot_skipped": 0
+      },
+      "mae": {
+        "point_estimate": 4.7825921732091965,
+        "ci_lower": 4.236545209547171,
+        "ci_upper": 5.337696434929168,
+        "n_boot": 1000,
+        "n_boot_skipped": 0
+      },
+      "rmse": {
+        "point_estimate": 6.010829679273868,
+        "ci_lower": 5.255445276717558,
+        "ci_upper": 6.776651999674937,
+        "n_boot": 1000,
+        "n_boot_skipped": 0
+      }
+    },
+    "embedding_b": {
+      "r2": {
+        "point_estimate": 0.8284877314923016,
+        "ci_lower": 0.7680801348439505,
+        "ci_upper": 0.8657700239599933,
+        "n_boot": 1000,
+        "n_boot_skipped": 0
+      },
+      "mae": {
+        "point_estimate": 4.044563275312478,
+        "ci_lower": 3.5180765895277046,
+        "ci_upper": 4.572816333725354,
+        "n_boot": 1000,
+        "n_boot_skipped": 0
+      },
+      "rmse": {
+        "point_estimate": 5.148795653780226,
+        "ci_lower": 4.552215509961654,
+        "ci_upper": 5.740984493785244,
+        "n_boot": 1000,
+        "n_boot_skipped": 0
+      }
+    }
+  },
+  "cosine_similarity": {
+    "mean": 0.9933124963474762,
+    "std": 0.0011451088738248072,
+    "min": 0.990644490664736,
+    "max": 0.9955088125093181,
+    "median": 0.9935693981079989
+  },
+  "linear_cka": 0.9807493365334347,
+  "orthogonal_procrustes": {
+    "disparity": 0.20708310520414927,
+    "procrustes_scale": 0.9785582937696152
+  },
+  "linear_reconstruction": {
+    "b_from_a": {
+      "r2_mean_across_dims": 0.8762235347826368,
+      "r2_median_across_dims": 0.9068587143882068,
+      "r2_min_across_dims": 0.3682047999482624,
+      "r2_max_across_dims": 0.998663371536014,
+      "ci_lower": 0.868135491260607,
+      "ci_upper": 0.8799368136088108,
+      "n_boot": 1000
+    },
+    "a_from_b": {
+      "r2_mean_across_dims": 0.8453776752746444,
+      "r2_median_across_dims": 0.8713265384456623,
+      "r2_min_across_dims": 0.33261284868799823,
+      "r2_max_across_dims": 0.9984270778617369,
+      "ci_lower": 0.835314408595786,
+      "ci_upper": 0.850002180449504,
+      "n_boot": 1000
+    }
+  },
+  "pairwise_similarity_correlation": {
+    "n_pairs": 14028,
+    "pearson_r": 0.9822697444499039,
+    "pearson_p": 0.0,
+    "spearman_r": 0.9621049301744707,
+    "spearman_p": 0.0
+  },
+  "top_k_jaccard": {
+    "k": 10,
+    "jaccard_mean": 0.6960717853574997,
+    "jaccard_std": 0.1489264369429152,
+    "jaccard_min": 0.3333333333333333,
+    "jaccard_max": 1.0
+  }
+}
