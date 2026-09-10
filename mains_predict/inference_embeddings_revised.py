@@ -155,7 +155,7 @@ def inference_step(
     for k, v in input_tensors.items():
         # Scale and normalize the input
         with torch.inference_mode():
-            with torch.autocast(device.type, dtype=torch.bfloat16):
+            with torch.autocast(device.type, dtype=torch.bfloat32):
                 batch_img = v.to(device)
                 if isinstance(model, models_vit.VisionTransformer):
                     # Return the latent space and if global_pool is True then
