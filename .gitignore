@@ -6,3 +6,5 @@ smoke_test_log/
 mae_env/
 *.pth
 *.tfevents.*
+example_inputs/
+embeddings_test/
