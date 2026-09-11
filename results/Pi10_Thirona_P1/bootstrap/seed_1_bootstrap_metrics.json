@@ -1,0 +1,9 @@
+{
+  "mse": {
+    "value": 0.25157120869683475,
+    "lower": 0.23364540106216172,
+    "upper": 0.2707481380741823,
+    "n_valid_resamples": 1000,
+    "n_undefined_resamples": 0
+  }
+}
