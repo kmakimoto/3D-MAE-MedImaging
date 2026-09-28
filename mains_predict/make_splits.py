@@ -35,7 +35,7 @@ from sklearn.model_selection import train_test_split
 NPZ_DIR = "/home/ahc44/Datos/COPDGene/COPDGeneEmbeddingFM/"
 NPZ_GLOB = "*tangerine*embedding*.npz"
 NPZ_KEY = "image"
-SCAN_TYPE = "INSP"             
+SCAN_TYPE = "INSP"
 
 LABELS_CSV = "example_inputs/COPDGene_P1P2P3.csv"
 LABELS_SID_COL = "sid"
@@ -47,20 +47,26 @@ EMBEDDING_PATH_COL = "EmbeddingPath"
 # (e.g. all cross-sectional outcomes get one train/val/test partition, all
 # longitudinal outcomes get another). "stratify": True marks AT MOST ONE
 # outcome per category as that category's stratification anchor -- every
-# other outcome in the category just rides along with that split.
+# other outcome in the category just rides along with that split. "recode"
+# (optional) remaps raw label values before splitting/training, e.g. to fold
+# a stray sentinel code into an existing class, or to shift negative codes
+# into a non-negative, contiguous range for CrossEntropyLoss.
 OUTCOMES = [
-    {"name": "COPD_P1",             "task": "binary",     "category": "cross_sectional", "stratify": True, "recode": {3.0: 0.0}},   
-    {"name": "finalGold_P1",             "task": "multiclass",     "category": "cross_sectional", "stratify": True, "recode": {-1.0: 5.0, -2.0:6.0}},
-    {"name": "pctEmph_Thirona_P1",  "task": "regression",  "category": "cross_sectional"},
-    {"name": "PRM_pct_airtrapping_Thirona_P1",  "task": "regression",  "category": "cross_sectional"},
-    {"name": "FEV1_post_P1",     "task": "regression",     "category": "cross_sectional"},
-    {"name": "FEV1_FVC_post_P1",  "task": "regression", "category": "cross_sectional"},
-    {"name": "Pi10_Thirona_P1",  "task": "regression", "category": "cross_sectional"},
-    {"name": "WallAreaPct_seg_Thirona_P1",  "task": "regression", "category": "cross_sectional"},
-    {"name": "Change_P1_P2_FEV1_ml_yr",  "task": "regression", "category": "longitudinal"},
-    {"name": "FEV1_post_P2",  "task": "regression", "category": "longitudinal"},
-    {"name": "Change_P1_P2_Gold_class",  "task": "multiclass", "category": "longitudinal", "recode": {-1.0: 2.0}},
-    {"name": "Pi10_Thirona_P2",  "task": "regression", "category": "longitudinal"},
+    {"name": "COPD_P1",                          "task": "binary",     "category": "cross_sectional", "stratify": True,
+     "recode": {3.0: 0.0}},
+    {"name": "finalGold_P1",                     "task": "multiclass", "category": "cross_sectional", "stratify": True,
+     "recode": {-1.0: 5.0, -2.0: 6.0}},
+    {"name": "pctEmph_Thirona_P1",                "task": "regression", "category": "cross_sectional"},
+    {"name": "PRM_pct_airtrapping_Thirona_P1",    "task": "regression", "category": "cross_sectional"},
+    {"name": "FEV1_post_P1",                      "task": "regression", "category": "cross_sectional"},
+    {"name": "FEV1_FVC_post_P1",                  "task": "regression", "category": "cross_sectional"},
+    {"name": "Pi10_Thirona_P1",                   "task": "regression", "category": "cross_sectional"},
+    {"name": "WallAreaPct_seg_Thirona_P1",        "task": "regression", "category": "cross_sectional"},
+    {"name": "Change_P1_P2_FEV1_ml_yr",           "task": "regression", "category": "longitudinal"},
+    {"name": "FEV1_post_P2",                      "task": "regression", "category": "longitudinal"},
+    {"name": "Change_P1_P2_Gold_class",           "task": "multiclass", "category": "longitudinal",
+     "recode": {-1.0: 2.0}},
+    {"name": "Pi10_Thirona_P2",                   "task": "regression", "category": "longitudinal"},
 ]
 
 TRAIN_FRAC = 0.5
@@ -81,10 +87,10 @@ OUTPUT_DIR = "/home/km2347/3D-MAE-MedImaging/example_inputs/splits"
 # --------------------------------------------------------------------------
 # Step 1: scan .npz embeddings
 # --------------------------------------------------------------------------
- 
+
 print(f"Scanning {NPZ_DIR} for '{NPZ_GLOB}'...")
 npz_paths = sorted(Path(NPZ_DIR).rglob(NPZ_GLOB))
- 
+
 if SCAN_TYPE:
     other = "EXP" if SCAN_TYPE == "INSP" else "INSP"
     n_before = len(npz_paths)
@@ -92,7 +98,7 @@ if SCAN_TYPE:
     print(f"scan_type={SCAN_TYPE}: kept {len(npz_paths)}/{n_before} files")
 else:
     print(f"{len(npz_paths)} files found (no scan_type filtering)")
- 
+
 sids, paths = [], []
 n_skipped_wrong_key = n_skipped_error = n_skipped_dupe = 0
 seen_sids = set()
@@ -117,30 +123,30 @@ for p in npz_paths:
     sids.append(sid)
     paths.append(str(p.resolve()))
     seen_sids.add(sid)
- 
+
 print(f"Loaded {len(sids)} valid embeddings "
       f"({n_skipped_wrong_key} skipped: wrong key/shape | {n_skipped_error} skipped: load error | "
       f"{n_skipped_dupe} skipped: duplicate SID)")
- 
+
 df_emb = pd.DataFrame({ID_COL: sids, EMBEDDING_PATH_COL: paths})
- 
+
 # --------------------------------------------------------------------------
 # Step 2: load labels
 # --------------------------------------------------------------------------
- 
+
 print(f"\nLoading labels: {LABELS_CSV}")
 outcome_names = [o["name"] for o in OUTCOMES]
 read_fn = pd.read_excel if Path(LABELS_CSV).suffix.lower() in (".xlsx", ".xls") else pd.read_csv
 df_labels = read_fn(LABELS_CSV)
 df_labels[ID_COL] = df_labels[LABELS_SID_COL].astype(str)
- 
+
 missing_cols = [c for c in outcome_names if c not in df_labels.columns]
 if missing_cols:
     raise ValueError(f"Outcome columns not found in {LABELS_CSV}: {missing_cols}. "
                       f"Available columns: {list(df_labels.columns)}")
- 
+
 df_labels = df_labels[[ID_COL] + outcome_names]
- 
+
 for oc in OUTCOMES:
     col = oc["name"]
     coerced = pd.to_numeric(df_labels[col], errors="coerce")
@@ -149,48 +155,48 @@ for oc in OUTCOMES:
         examples = df_labels.loc[coerced.isna() & df_labels[col].notna(), col].unique()[:5]
         print(f"  WARNING: '{col}' had {n_non_numeric} non-numeric value(s) coerced to NaN, e.g.: {list(examples)}")
     df_labels[col] = coerced
- 
+
     recode = oc.get("recode")
     if recode:
         n_recoded = int(df_labels[col].isin(recode.keys()).sum())
         df_labels[col] = df_labels[col].replace(recode)
         print(f"  '{col}': recoded {n_recoded} values via {recode}")
- 
+
     if oc["task"] == "binary":
         uniques = sorted(df_labels[col].dropna().unique().tolist())
         if len(uniques) > 2:
             print(f"  WARNING: '{col}' is marked task=binary but has {len(uniques)} distinct non-missing "
                   f"values after coercion/recoding: {uniques}. roc_auc_score will fail on this later unless "
                   f"you add/adjust a \"recode\" dict for '{col}' in OUTCOMES to fold it down to exactly 2 values.")
- 
+
 if df_labels[ID_COL].duplicated().any():
     n_dupes = int(df_labels[ID_COL].duplicated().sum())
     print(f"  WARNING: {n_dupes} duplicate SIDs in {LABELS_CSV} -- keeping the first occurrence.")
     df_labels = df_labels.drop_duplicates(subset=ID_COL, keep="first")
- 
+
 # --------------------------------------------------------------------------
 # Step 3: merge (embeddings side is the left -- keep every subject with a
 # usable embedding even if some/all outcomes are missing for them)
 # --------------------------------------------------------------------------
- 
+
 master = df_emb.merge(df_labels, on=ID_COL, how="left")
- 
+
 sids_without_any_label = master[master[outcome_names].isna().all(axis=1)][ID_COL].tolist()
 if sids_without_any_label:
     print(f"\nWARNING: {len(sids_without_any_label)} subjects have an embedding but no matching row "
           f"in {LABELS_CSV} at all (all outcome columns NaN), e.g.: {sids_without_any_label[:5]}")
- 
+
 sids_no_embedding = set(df_labels[ID_COL]) - set(df_emb[ID_COL])
 if sids_no_embedding:
     print(f"Note: {len(sids_no_embedding)} SIDs in {LABELS_CSV} had no matching .npz embedding "
           f"and are excluded from every split (e.g.: {list(sids_no_embedding)[:5]})")
- 
- 
+
+
 # --------------------------------------------------------------------------
 # Step 4: split each category, using its stratify=True outcome (if any) as
 # the stratification anchor
 # --------------------------------------------------------------------------
- 
+
 def three_way_split(df, strat_key, train_frac, val_frac, test_frac, seed):
     """Stratified (or, if strat_key is None / stratification fails, plain
     random) three-way split. Too few rows to meaningfully split three ways
@@ -201,15 +207,15 @@ def three_way_split(df, strat_key, train_frac, val_frac, test_frac, seed):
         return empty, empty, empty
     if len(df) < 3:
         return df, empty, empty
- 
+
     try:
         train_val_df, test_df = train_test_split(df, test_size=test_frac, stratify=strat_key, random_state=seed)
     except ValueError:
         train_val_df, test_df = train_test_split(df, test_size=test_frac, stratify=None, random_state=seed)
- 
+
     if len(train_val_df) < 2:
         return train_val_df, empty, test_df
- 
+
     strat_remaining = strat_key.loc[train_val_df.index] if strat_key is not None else None
     val_size_of_remaining = val_frac / (train_frac + val_frac)
     try:
@@ -219,42 +225,51 @@ def three_way_split(df, strat_key, train_frac, val_frac, test_frac, seed):
         train_df, val_df = train_test_split(
             train_val_df, test_size=val_size_of_remaining, stratify=None, random_state=seed)
     return train_df, val_df, test_df
- 
- 
+
+
 def summarize(df, outcome, task):
+    """Per-split summary stats for one outcome.
+
+    binary/multiclass: n + class_counts ({class_value: count}, sorted by
+    class label so the same class lands in the same position across every
+    train/val/test row instead of being ordered by frequency). binary also
+    keeps "prevalence" (fraction of the positive class) alongside the counts.
+    regression: n + mean + std.
+    """
     avail = df[df[outcome].notna()]
-    if task == "binary":
-        return {"n": len(avail), "prevalence": round(avail[outcome].mean(), 4) if len(avail) else None}
-    elif task == "multiclass":
-        return {"n": len(avail), "class_counts": avail[outcome].value_counts().to_dict()}
+    if task in ("binary", "multiclass"):
+        out = {"n": len(avail), "class_counts": avail[outcome].value_counts().sort_index().to_dict()}
+        if task == "binary":
+            out["prevalence"] = round(avail[outcome].mean(), 4) if len(avail) else None
+        return out
     else:
         return {"n": len(avail),
                 "mean": round(avail[outcome].mean(), 4) if len(avail) else None,
                 "std": round(avail[outcome].std(), 4) if len(avail) else None}
- 
- 
+
+
 out_dir = Path(OUTPUT_DIR)
 out_dir.mkdir(parents=True, exist_ok=True)
- 
+
 categories = sorted(set(o["category"] for o in OUTCOMES))
 summary_rows = []
- 
+
 print()
 for category in categories:
     cat_outcomes = [o for o in OUTCOMES if o["category"] == category]
     cat_outcome_names = [o["name"] for o in cat_outcomes]
- 
+
     sub = master[master[cat_outcome_names].notna().any(axis=1)].copy()
     if len(sub) == 0:
         print(f"[{category}] SKIPPED: no subject has a non-missing value for any outcome in this category.")
         continue
- 
+
     anchors = [o for o in cat_outcomes if o.get("stratify")]
     if len(anchors) > 1:
         print(f"  WARNING: multiple outcomes marked stratify=True in '{category}' "
               f"({[o['name'] for o in anchors]}); using the first one.")
     anchor = anchors[0] if anchors else None
- 
+
     if anchor is None:
         train_df, val_df, test_df = three_way_split(sub, None, TRAIN_FRAC, VAL_FRAC, TEST_FRAC, SEED)
         regime, anchor_name = "standard (no stratification anchor)", None
@@ -262,7 +277,7 @@ for category in categories:
         name, task = anchor["name"], anchor["task"]
         has_anchor = sub[sub[name].notna()]
         missing_anchor = sub[sub[name].isna()]
- 
+
         train_frac, val_frac, test_frac, regime = TRAIN_FRAC, VAL_FRAC, TEST_FRAC, "standard"
         strat_key = None
         if task == "binary":
@@ -278,23 +293,23 @@ for category in categories:
                 strat_key = pd.qcut(has_anchor[name], q=REGRESSION_BINS, duplicates="drop")
             except ValueError:
                 strat_key = None
- 
+
         train_a, val_a, test_a = three_way_split(has_anchor, strat_key, train_frac, val_frac, test_frac, SEED)
         train_m, val_m, test_m = three_way_split(missing_anchor, None, train_frac, val_frac, test_frac, SEED)
         train_df = pd.concat([train_a, train_m])
         val_df = pd.concat([val_a, val_m])
         test_df = pd.concat([test_a, test_m])
         anchor_name = name
- 
+
     keep_cols = [ID_COL, EMBEDDING_PATH_COL] + cat_outcome_names
     train_df[keep_cols].to_csv(out_dir / f"{category}_train.csv", index=False)
     val_df[keep_cols].to_csv(out_dir / f"{category}_val.csv", index=False)
     test_df[keep_cols].to_csv(out_dir / f"{category}_test.csv", index=False)
- 
+
     anchor_note = f", stratified on '{anchor_name}'" if anchor_name else ""
     print(f"[{category}] ({regime} split{anchor_note}) "
           f"n_total={len(sub)}  train={len(train_df)}  val={len(val_df)}  test={len(test_df)}")
- 
+
     for oc in cat_outcomes:
         name, task = oc["name"], oc["task"]
         row = {"category": category, "outcome": name, "task": task, "split_regime": regime,
@@ -305,7 +320,7 @@ for category in categories:
         row.update({f"test_{k}": v for k, v in summarize(test_df, name, task).items()})
         summary_rows.append(row)
         print(f"    '{name}' ({task}): train_n={row['train_n']}  val_n={row['val_n']}  test_n={row['test_n']}")
- 
+
 pd.DataFrame(summary_rows).to_csv(out_dir / "split_summary.csv", index=False)
 print(f"\nWrote per-category train/val/test CSVs (SID + {EMBEDDING_PATH_COL} + outcomes) "
       f"and split_summary.csv to {out_dir}")
